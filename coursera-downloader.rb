@@ -4,8 +4,8 @@ require "uri"
 require 'net/http'
 require 'cgi'
 require 'nokogiri'
-require 'awesome_print'
-
+require 'xmlrpc/client'
+# require 'awesome_print'
 
 if ARGV.size < 3
   puts "coursera-downloader.rb <username> <password> <course>"
@@ -54,7 +54,7 @@ def get_content_site(cookie_string, course_name)
     request = Net::HTTP::Get.new(uri)
     request["Cookie"] = cookie_string
     response = http.request(request)
-    ap data = response.body
+    data = response.body
   end
 
   return data
@@ -76,8 +76,23 @@ end
 username = ARGV[0]
 password = ARGV[1]
 course_name = ARGV[2]
+
 initial_resp = initial_response(course_uri(course_name))
 cookies = do_login(initial_resp, username, password)
 cookie_string = build_cookie_string(cookies)
 data = get_content_site(cookie_string, course_name)
 links = get_download_links(data)
+
+links.map! { |link| [link] }
+
+begin
+  client = XMLRPC::Client.new("192.168.1.1", "/rpc", 6800)
+  links.each do |link|
+    result = client.call("aria2.addUri", link, {'header'=> "cookie: #{cookie_string}"})
+  end
+
+rescue XMLRPC::FaultException => e
+  puts "Error:"
+  puts e.faultCode
+  puts e.faultString
+end
